@@ -168,6 +168,9 @@ namespace UnityEngine.AssetBundles
                         menu.AddItem(new GUIContent("Add Sibling/New Bundle"), false, CreateNewSiblingBundle, selectedNodes);
                         menu.AddItem(new GUIContent("Add Sibling/New Folder"), false, CreateNewSiblingFolder, selectedNodes);
                         menu.AddItem(new GUIContent("Convert to variant"), false, ConvertToVariant, selectedNodes);
+                        //SmallWorld
+                        if(selectedNodes.Count == 1)
+                            menu.AddItem(new GUIContent("Build this bundle"), false, BuildSelectedBundle, selectedNodes);
                     }
                     else
                     {
@@ -301,6 +304,17 @@ namespace UnityEngine.AssetBundles
                 if (newBundle != null)
                     hash = newBundle.nameHashCode;
                 ReloadAndSelect(hash, true);
+            }
+        }
+
+        //SmallWorld
+        void BuildSelectedBundle(object context)
+        {
+            var selectedNodes = context as List<AssetBundleModel.BundleTreeItem>;
+            if (selectedNodes.Count == 1)//No need to check
+            {
+                var bundle = selectedNodes[0].bundle as AssetBundleModel.BundleDataInfo;
+                EditorUtility.DisplayDialog("Build bundle", "Do you want to build bundle: " + bundle.displayName, "Build");
             }
         }
 
