@@ -5,6 +5,8 @@ using UnityEditor.IMGUI.Controls;
 using System.Linq;
 using System;
 
+using UnityEngine.AssetBundles.AssetBundleDataSource;
+using System.IO;
 
 namespace UnityEngine.AssetBundles
 {
@@ -13,6 +15,9 @@ namespace UnityEngine.AssetBundles
         AssetBundleManageTab m_Controller;
         private bool m_ContextOnItem = false;
         List<UnityEngine.Object> m_EmptyObjectList = new List<Object>();
+
+        AssetBundleModel.BundleDataInfo selectBundle;
+        BuildTarget target;
 
         public AssetBundleTree(TreeViewState state, AssetBundleManageTab ctrl) : base(state)
         {
@@ -169,8 +174,14 @@ namespace UnityEngine.AssetBundles
                         menu.AddItem(new GUIContent("Add Sibling/New Folder"), false, CreateNewSiblingFolder, selectedNodes);
                         menu.AddItem(new GUIContent("Convert to variant"), false, ConvertToVariant, selectedNodes);
                         //SmallWorld
-                        if(selectedNodes.Count == 1)
-                            menu.AddItem(new GUIContent("Build this bundle"), false, BuildSelectedBundle, selectedNodes);
+                        if (selectedNodes.Count == 1)
+                        {
+                            //menu.AddItem(new GUIContent("Build this bundle"), false, BuildSelectedBundle, selectedNodes);
+                            menu.AddItem(new GUIContent("Build this bundle/Android"), false, BuildSelectedBundleAndroid, selectedNodes);
+                            menu.AddItem(new GUIContent("Build this bundle/iOS"), false, BuildSelectedBundleIOS, selectedNodes);
+                            menu.AddItem(new GUIContent("Build this bundle/WebGL"), false, BuildSelectedBundleWebGL, selectedNodes);
+                            menu.AddItem(new GUIContent("Build this bundle/Window"), false, BuildSelectedBundleWindow, selectedNodes);
+                        }
                     }
                     else
                     {
@@ -308,15 +319,95 @@ namespace UnityEngine.AssetBundles
         }
 
         //SmallWorld
+
+        void BuildSelectedBundleAndroid(object context) {
+            target = (BuildTarget)AssetBundleBuildTab.ValidBuildTarget.Android;
+            BuildSelectedBundle(context);
+        }
+
+        void BuildSelectedBundleIOS(object context)
+        {
+            target = (BuildTarget)AssetBundleBuildTab.ValidBuildTarget.iOS;
+            BuildSelectedBundle(context);
+        }
+
+        void BuildSelectedBundleWebGL(object context)
+        {
+            target = (BuildTarget)AssetBundleBuildTab.ValidBuildTarget.WebGL;
+            BuildSelectedBundle(context);
+        }
+
+        void BuildSelectedBundleWindow(object context)
+        {
+            target = (BuildTarget)AssetBundleBuildTab.ValidBuildTarget.StandaloneWindows;
+            BuildSelectedBundle(context);
+        }
+
         void BuildSelectedBundle(object context)
         {
             var selectedNodes = context as List<AssetBundleModel.BundleTreeItem>;
             if (selectedNodes.Count == 1)//No need to check
             {
-                var bundle = selectedNodes[0].bundle as AssetBundleModel.BundleDataInfo;
-                EditorUtility.DisplayDialog("Build bundle", "Do you want to build bundle: " + bundle.displayName, "Build");
+                selectBundle = selectedNodes[0].bundle as AssetBundleModel.BundleDataInfo;
+                EditorApplication.delayCall += SmallWorldBuild;
             }
         }
+
+        private void SmallWorldBuild() {
+            HashSet<string> depens = selectBundle.GetBundleDependencies();
+            String listDepens = "";
+            foreach (string depen in depens)
+                listDepens += depen + ";";
+            EditorUtility.DisplayDialog("Building", "Do you want to build bundle: " + selectBundle.displayName 
+                + " for target " + target.ToString() + "\nDependencies: " + listDepens, "Build");
+
+            BuildAssetBundleOptions opt = BuildAssetBundleOptions.ChunkBasedCompression;
+
+            //opt |= BuildAssetBundleOptions.ChunkBasedCompression;
+
+            ABBuildInfo buildInfo = new ABBuildInfo();
+            
+            buildInfo.outputDirectory = "BookOutputs/" + selectBundle.displayName + "/" + target.ToString();
+            buildInfo.options = opt;
+            buildInfo.buildTarget = target;
+
+            //Delete target folder first
+            if (Directory.Exists(buildInfo.outputDirectory))
+                Directory.Delete(buildInfo.outputDirectory, true);
+            Directory.CreateDirectory(buildInfo.outputDirectory);
+            //Now we try to build what needs
+            //AssetBundleModel.Model.DataSource.BuildAssetBundles(buildInfo);
+            Debug.Log("There're " + (depens.Count + 1) + " bundle(s)");
+            AssetBundleBuild[] buildMap = new AssetBundleBuild[depens.Count + 1];
+
+            //Add dependencies first
+            List<string> listDepends = depens.ToList();
+            for (int i = 0; i < depens.Count; i++)
+                AddAssetBundleToBuildMap(buildMap, i, listDepends[i]);
+            
+            //Main bundle at the end
+            AddAssetBundleToBuildMap(buildMap, depens.Count, selectBundle.m_Name.bundleName);
+
+            //Now we build
+            BuildPipeline.BuildAssetBundles(buildInfo.outputDirectory, buildMap, buildInfo.options, buildInfo.buildTarget);
+
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+        }
+
+        static void AddAssetBundleToBuildMap(AssetBundleBuild[] buildMap, int position, string buildName)
+        {
+            //string[] assetPaths = AssetDatabase.GetAssetPathsFromAssetBundle(buildName);
+            string[] assetPaths = AssetBundleModel.Model.DataSource.GetAssetPathsFromAssetBundle(buildName);
+            buildMap[position].assetNames = assetPaths;
+            buildMap[position].assetBundleName = buildName;
+            string debug = "Adding bundle index " + position + " name " + buildName + " into this build. File list: " 
+                + assetPaths.Length;
+            for (int i = 0; i < assetPaths.Length; i++)
+                debug += "\n" + assetPaths[i];
+            Debug.Log(debug);
+        }
+
+        //End of SmallWorld
 
         void DedupeOverlappedBundles(object context)
         {
