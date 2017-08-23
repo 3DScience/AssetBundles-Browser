@@ -7,6 +7,7 @@ using System;
 
 using UnityEngine.AssetBundles.AssetBundleDataSource;
 using System.IO;
+using Ionic.Zip;
 
 namespace UnityEngine.AssetBundles
 {
@@ -356,8 +357,13 @@ namespace UnityEngine.AssetBundles
         private void SmallWorldBuild() {
             HashSet<string> depens = selectBundle.GetBundleDependencies();
             String listDepens = "";
+            List<string> filesToDelete = new List<string>();
             foreach (string depen in depens)
+            {
                 listDepens += depen + ";";
+                filesToDelete.Add(depen);
+                filesToDelete.Add(depen + ".manifest");
+            }
             EditorUtility.DisplayDialog("Building", "Do you want to build bundle: " + selectBundle.displayName 
                 + " for target " + target.ToString() + "\nDependencies: " + listDepens, "Build");
 
@@ -366,8 +372,9 @@ namespace UnityEngine.AssetBundles
             //opt |= BuildAssetBundleOptions.ChunkBasedCompression;
 
             ABBuildInfo buildInfo = new ABBuildInfo();
-            
-            buildInfo.outputDirectory = "BookOutputs/" + selectBundle.displayName + "/" + target.ToString();
+
+            String rootdir = "BookOutputs/" + selectBundle.displayName + "/";
+            buildInfo.outputDirectory = rootdir + target.ToString() + "/";
             buildInfo.options = opt;
             buildInfo.buildTarget = target;
 
@@ -390,6 +397,41 @@ namespace UnityEngine.AssetBundles
 
             //Now we build
             BuildPipeline.BuildAssetBundles(buildInfo.outputDirectory, buildMap, buildInfo.options, buildInfo.buildTarget);
+
+            //Refactor name, cleanup & zip after build
+            string src = buildInfo.outputDirectory + target.ToString();
+            string des = buildInfo.outputDirectory + selectBundle.m_Name.bundleName + ".mf";
+
+            if (File.Exists(des))
+                File.Delete(des);
+
+            Debug.Log("==== REFACTORING AFTER BUILD ====\nRename file " + src + " ====> " + des);
+            System.IO.File.Move(src, des);
+
+            //filesToDelete.Add(target.ToString() + ".manifest");
+            
+            filesToDelete.Add(target.ToString() + ".manifest");
+            filesToDelete.Add(selectBundle.m_Name.bundleName + ".manifest");
+
+            foreach (string delfile in filesToDelete)
+                File.Delete(buildInfo.outputDirectory + delfile);
+
+            //Zip file
+            string[] zipFiles =
+            {
+                        buildInfo.outputDirectory + selectBundle.m_Name.bundleName,
+                        buildInfo.outputDirectory + selectBundle.m_Name.bundleName + ".mf"
+                    };
+            //target.ToString() ==> iOS
+            //AssetBundleManager.GetPlatformFolder(target) ==> iPhone
+            using (ZipFile zip = new ZipFile())
+            {
+                foreach (string file in zipFiles)
+                {
+                    zip.AddFile(file, target.ToString());
+                }
+                zip.Save(rootdir + selectBundle.m_Name.bundleName + "_" + target.ToString() + ".zip");
+            }
 
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
         }
