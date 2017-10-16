@@ -434,6 +434,7 @@ namespace UnityEngine.AssetBundles
             }
 
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+			EditorUtility.DisplayDialog("Done", "AssetBundles built done", "Ok");
         }
 
         static void AddAssetBundleToBuildMap(AssetBundleBuild[] buildMap, int position, string buildName)
